@@ -65,6 +65,14 @@ pip install -r requirements.txt
 
 ---
 
+## Data
+```bash
+mkdir data
+cd data
+wget -O DoH-combined.zip "https://eprints.lib.hokudai.ac.jp/dspace/bitstream/2115/88092/1/CIRA-CIC-DoHBrw-2020-and-DoH-Tunnel-Traffic-HKD.zip"
+unzip DoH-combined.zip
+```
+
 ## Usage
 
 ### Full run (all four models, both CSVs)
