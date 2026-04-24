@@ -10,95 +10,121 @@
 
 This branch implements the **adversarial side** of the project. The goal is to generate DoH C2 traffic that evades the flow-based ML classifiers built in the `detectors` branch (RF, GB, XGB, MLP).
 
-We built two pipelines:
+We built three pipelines, each representing a different attacker capability level:
 
-1. **`integrate_detectors.py`** — Fast synthetic pipeline. Computes flow features directly from simulated schedules without generating real packets. Good for quick iteration but features don't perfectly match training data.
-
-2. **`real_adversarial_pipeline.py`** — Real pipeline. Converts evasion schedules into actual TCP packets via Scapy, extracts features using CICFlowMeter (same tool the training data used), then scores against the detectors. This is the accurate, defensible result.
+| Pipeline | Attacker Knowledge | Purpose |
+|---|---|---|
+| `integrate_detectors.py` | Synthetic features, no real packets | Fast iteration baseline |
+| `real_adversarial_pipeline.py` | Full model access + scaler | White-box upper bound |
+| `blackbox_adversarial_pipeline.py` | Only observed benign traffic | Realistic attacker |
 
 ---
 
 ## Key Findings
 
-### White-box Attack (used actual dataset distributions)
-| Strategy | GB | RF | XGB |
-|---|---|---|---|
-| naive | 100% | 100% | 100% |
-| timing_only | 100% | 95% | 100% |
-| size_mimicry | 100% | 100% | 100% |
-| cover_traffic | 100% | 100% | 100% |
-| full_mimicry | 100% | 100% | 100% |
-| adaptive | 100% | 95% | 100% |
+### White-box Attack — Upper Bound
+*Attacker has: scaler, feature names, predict_proba, SHAP analysis*
 
-### Gray-box Attack (used synthetic fingerprint from published literature — independent of training data)
-| Strategy | GB | RF | XGB |
+| Strategy | RF | GB | XGB |
 |---|---|---|---|
 | naive | 100% | 100% | 100% |
 | timing_only | 100% | 100% | 100% |
 | size_mimicry | 100% | 100% | 100% |
 | cover_traffic | 100% | 100% | 100% |
 | full_mimicry | 100% | 100% | 100% |
-| adaptive | 100% | 90% | 100% |
+| adaptive | 100% | 100% | 100% |
 
-**The attack works with 90-100% evasion regardless of whether the attacker has access to the training data.**
+### Black-box Attack — Realistic Attacker
+*Attacker has: observed benign traffic, CICFlowMeter, Scapy. No scaler, no model internals.*
+
+| Strategy | RF | GB | XGB |
+|---|---|---|---|
+| naive | 0% | 0% | 0% |
+| timing_only | 0% | 40% | 0% |
+| size_mimicry | 0% | 40% | 0% |
+| cover_traffic | 0% | 25% | 0% |
+| full_mimicry | 0% | 50% | 0% |
+| adaptive | 0% | 50% | 0% |
+
+### The Critical Finding
+
+The gap between white-box (100%) and black-box (0-50%) reveals that **the scaler (`scaler.joblib`) is the key defense artifact**. Without it, RF and XGB are completely robust. GB is partially vulnerable.
+
+This means:
+- If the defender keeps the scaler private, RF and XGB are strong defenses
+- GB has inherent weaknesses even without model access
+- An attacker who steals the scaler gains a massive advantage
 
 ---
 
-## Why It Works — SHAP Analysis
+## Threat Model — Three Levels
 
-We ran SHAP on all three models to identify which features drive detection. The top features were:
+### Level 1: Black-box (Realistic)
+- Attacker observes benign DoH traffic on their network
+- Uses public tools (CICFlowMeter, Scapy)
+- Gets binary feedback: blocked or not blocked
+- **Result: 0-50% evasion (GB only)**
+
+### Level 2: Gray-box (Partial knowledge)
+- Attacker has CIRA-CIC benign distributions from published literature
+- Knows general feature structure from papers
+- Does not have the scaler
+- **Result: Similar to black-box without scaler**
+
+### Level 3: White-box (Upper bound)
+- Attacker has full model access, scaler, feature names, SHAP
+- Represents a worst-case scenario (model theft)
+- **Result: 100% evasion across all strategies and models**
+
+---
+
+## Why It Works (White-box) — SHAP Analysis
+
+We ran SHAP on all three models to identify which features drive detection:
 
 | Feature | RF Importance | XGB Importance |
 |---|---|---|
 | PacketLengthMode | 0.124 | 5.624 |
-| PacketLengthMean | 0.037 | 1.012 |
+| PacketLengthMedian | 0.035 | 1.344 |
 | FlowBytesReceived | 0.037 | 1.518 |
-| PacketTimeStandardDeviation | 0.040 | 0.096 |
+| PacketLengthMean | 0.037 | 1.012 |
+| ResponseTimeTimeMean | 0.008 | 0.497 |
 
-The key insight: **real benign DoH traffic has very small packets** (mode ~74B, mean ~137B). Naive C2 tools send large, uniform packets — trivially detectable. Our attack generates flows matching the real benign distributions.
+**Key insight:** Real benign DoH has tiny packets (mode ~74B). C2 tools send large uniform packets. Match the size distribution and fool the classifier.
 
-Real benign distributions (from `l2-total-add.csv`):
-- `PacketLengthMode`: mean=74B, std=20B
-- `PacketLengthMean`: mean=137B, std=82B  
-- `FlowBytesSent`: mean=10KB (requires ~400-600 packets per flow)
-- `PacketTimeStd`: mean=11ms (timing in milliseconds, not seconds)
-
-Two bugs we had to fix to get real results:
-1. CICFlowMeter outputs time in **seconds**, but the training data used **milliseconds** — multiply all IAT features by 1000
-2. Our flows had too few packets (~50) — benign flows have 400-600 packets to reach ~62KB `FlowBytesSent`
+**Two critical bugs we fixed:**
+1. CICFlowMeter outputs time in **seconds**, training data used **milliseconds** — multiply x 1000
+2. Benign flows have 400-600 packets (~62KB) — we initially generated only ~50
 
 ---
 
 ## Architecture
 
 ```
-traffic_shaper.py          → Generates query schedules (6 evasion strategies)
-        ↓
-real_adversarial_pipeline.py
-        ↓
-  [Scapy] → TCP packets with realistic sizes/timing
-        ↓
-  [CICFlowMeter] → 28 real flow features
-        ↓
-  [RF / GB / XGB] → Classification score
-        ↓
-  real_adversarial_results.csv
+traffic_shaper.py
+      | (6 evasion strategies)
+[Scapy] - Full TCP sessions with handshake + data + teardown
+      |
+PCAP file
+      |
+[CICFlowMeter] - 28 real flow features (same tool as training data)
+      |
+[White-box] scaler.transform() + predict_proba()    -> 100% evasion
+[Black-box] raw unscaled features + model.predict() -> 0-50% evasion
 ```
 
 ---
 
 ## Evasion Strategies
 
-| Strategy | Description | How it works |
-|---|---|---|
-| `naive` | Fixed 5s beacon, no shaping | Baseline — trivially caught without size/timing fixes |
-| `timing_only` | Randomized IAT matching browser distribution | Fixes timing but not size |
-| `size_mimicry` | Timing + EDNS0 padding to match packet sizes | Adds size shaping |
-| `cover_traffic` | Interleaves decoy queries to real resolvers | Mixes C2 with benign-looking queries |
-| `full_mimicry` | Everything + burst grouping mimicking page loads | Full statistical mimicry |
-| `adaptive` | Full mimicry + classifier feedback loop | Tightens parameters based on detection results |
-
-With correct feature generation, **all 6 strategies achieve 90-100% evasion**.
+| Strategy | Description |
+|---|---|
+| `naive` | Fixed 5s beacon, no shaping — baseline, trivially caught |
+| `timing_only` | Randomized IAT matching browser Poisson distribution |
+| `size_mimicry` | Timing + packet sizes matching benign distribution |
+| `cover_traffic` | Decoy queries to real resolvers (Google, Cloudflare) |
+| `full_mimicry` | Timing + size + cover + burst grouping (page load simulation) |
+| `adaptive` | Full mimicry + classifier feedback loop |
 
 ---
 
@@ -110,10 +136,9 @@ With correct feature generation, **all 6 strategies achieve 90-100% evasion**.
 pip install numpy pandas scipy scikit-learn joblib scapy cicflowmeter
 ```
 
-### Fix CICFlowMeter Bug (v0.5.0 has two bugs — patch them)
+### Fix CICFlowMeter v0.5.0 Bugs
 
 ```bash
-# Fix 1: sniffer.py
 python3 -c "
 path = '/opt/anaconda3/lib/python3.12/site-packages/cicflowmeter/sniffer.py'
 txt = open(path).read()
@@ -122,7 +147,6 @@ open(path, 'w').write(fixed)
 print('Fixed sniffer.py')
 "
 
-# Fix 2: flow.py
 python3 -c "
 path = '/opt/anaconda3/lib/python3.12/site-packages/cicflowmeter/flow.py'
 txt = open(path).read()
@@ -137,8 +161,6 @@ print('Fixed flow.py')
 
 ### Dataset
 
-The Hokkaido dataset is required to train the detectors:
-
 ```bash
 mkdir data && cd data
 curl -L -o DoH-combined.zip "https://eprints.lib.hokudai.ac.jp/dspace/bitstream/2115/88092/1/CIRA-CIC-DoHBrw-2020-and-DoH-Tunnel-Traffic-HKD.zip"
@@ -149,7 +171,7 @@ unzip DoH-combined.zip
 
 ## How to Run
 
-### Step 1 — Train the detectors (from `detectors` branch)
+### Step 1 — Train the detectors
 
 ```bash
 git checkout detectors
@@ -157,31 +179,29 @@ python detector.py --l2 data/l2-total-add.csv --l3 data/l3-total-add.csv --outpu
 git checkout adversarial
 ```
 
-### Step 2 — Run the real adversarial pipeline
+### Step 2 — White-box attack (upper bound)
 
 ```bash
-# Full run (20 flows per strategy, ~10 mins)
 python real_adversarial_pipeline.py --results ./results_full --flows 20
+```
 
-# With feature validation (shows our features vs benign)
+### Step 3 — Black-box attack (realistic attacker)
+
+```bash
+python blackbox_adversarial_pipeline.py --results ./results_full --flows 20
+```
+
+### Step 4 — Validate feature matching
+
+```bash
 python real_adversarial_pipeline.py --results ./results_full --flows 3 --validate
-
-# Gray-box attack (uses synthetic fingerprint, independent of training data)
-python real_adversarial_pipeline.py --results ./results_full --fingerprint benign_fingerprint.json --flows 20
 ```
 
-### Step 3 — Run the fast synthetic pipeline (for quick iteration)
+### Step 5 — Quick demo (no models needed)
 
 ```bash
-python integrate_detectors.py --results ./results_full --flows 20
-```
-
-### Step 4 — Standalone demo (no models needed)
-
-```bash
-python main.py --demo        # Shows traffic shaping across all strategies
-python main.py --doh-demo    # Shows DoH C2 encoding dry-run
-python main.py --flows 50    # Runs full adversarial loop with stub detector
+python main.py --demo
+python main.py --doh-demo
 ```
 
 ---
@@ -190,49 +210,40 @@ python main.py --flows 50    # Runs full adversarial loop with stub detector
 
 | File | Purpose |
 |---|---|
-| `real_adversarial_pipeline.py` | **Main file.** Real Scapy+CICFlowMeter pipeline |
-| `integrate_detectors.py` | Fast synthetic pipeline — plugs into team's models |
-| `traffic_shaper.py` | Core evasion engine — 6 strategies, schedule generation |
-| `cira_cic_analyzer.py` | Extracts benign distributions from CIRA-CIC dataset |
-| `doh_c2_client.py` | DoH C2 protocol — encodes, encrypts, sends C2 data |
-| `adversarial_loop.py` | Standalone attack-detect-adapt feedback loop |
+| `real_adversarial_pipeline.py` | White-box pipeline — Scapy + CICFlowMeter + scaler |
+| `blackbox_adversarial_pipeline.py` | Realistic attacker — no scaler, binary feedback only |
+| `integrate_detectors.py` | Fast synthetic pipeline for quick iteration |
+| `traffic_shaper.py` | Core evasion engine — 6 strategies |
+| `cira_cic_analyzer.py` | Extracts benign distributions from CIRA-CIC |
+| `doh_c2_client.py` | DoH C2 protocol — encodes, encrypts, transmits |
+| `adversarial_loop.py` | Standalone attack-detect-adapt loop |
 | `main.py` | Entry point for standalone runs |
-| `benign_fingerprint.json` | Synthetic benign feature distributions (from literature) |
-| `real_adversarial_results.csv` | Final evasion results — 20 flows per strategy |
-| `adversarial_report.json` | Results from stub detector baseline |
-
----
-
-## Threat Model
-
-**White-box attack:** Attacker has access to the training dataset distributions. Used to establish upper bound on evasion (95-100%).
-
-**Gray-box attack:** Attacker only has general knowledge of DoH traffic patterns from published literature (CIRA-CIC papers). Used to show the attack is realistic. Results: 90-100% evasion — nearly identical to white-box.
-
-**What this reveals:** Flow-based statistical detection is fundamentally vulnerable to an attacker who can match benign traffic distributions at the packet level. The classifier cannot distinguish C2 traffic from benign if the flow statistics are identical. The only defenses would be content inspection (which DoH encrypts by design) or longer-window behavioral analysis.
-
----
-
-## Connecting to the Detectors Branch
-
-Once the detector team trains models and exports them:
-
-```bash
-# They run:
-python detector.py --l2 data/l2-total-add.csv --output ./results_full --no_nn
-
-# You run:
-python real_adversarial_pipeline.py --results ./results_full --flows 20
-```
-
-The pipeline automatically loads `rf.joblib`, `gb.joblib`, `xgb.joblib`, and `scaler.joblib` from the results directory.
+| `benign_fingerprint.json` | Synthetic benign distributions from literature |
+| `real_adversarial_results.csv` | White-box results — 20 flows per strategy |
+| `blackbox_results.csv` | Black-box results — realistic attacker |
+| `adversarial_report.json` | Stub detector baseline results |
 
 ---
 
 ## Presentation Narrative
 
-1. **The attack pipeline:** Evasion shaper → Scapy TCP sessions → CICFlowMeter → Classifier
-2. **SHAP-guided targeting:** We identified the top features (PacketLengthMode, FlowBytesSent) and reverse-engineered the benign distributions
-3. **Results:** 90-100% evasion across all 6 strategies, all 3 models, both white-box and gray-box settings
-4. **The finding:** Flow-based detection alone is insufficient. An attacker who mimics benign traffic statistics at the packet level can fully evade these classifiers.
-5. **Limitation:** This is a distribution-matching attack. A real attacker would need to observe benign DoH traffic on their network to estimate these distributions — which is feasible.
+1. **The setup:** Flow-based ML detectors trained on 374k real DoH flows. Our job: fool them.
+2. **The pipeline:** Traffic shaper → Scapy TCP sessions → CICFlowMeter → Classifier.
+3. **SHAP-guided targeting:** PacketLengthMode is the #1 feature. Real benign DoH = tiny packets (~74B). We match that.
+4. **White-box results:** 100% evasion across all 6 strategies, all 3 models. Upper bound assuming model theft.
+5. **Black-box results:** 0-50% evasion without model access. RF and XGB are robust. GB partially vulnerable.
+6. **The key finding:** The scaler is the critical defense artifact. Keeping it private makes RF and XGB nearly impenetrable. Stealing it makes evasion trivial.
+7. **What this means for defenders:** Flow-based detection is viable IF model artifacts are kept strictly private. The architecture is sound — operational security is the weak point.
+
+---
+
+## Connecting to the Detectors Branch
+
+```bash
+# Detectors team runs:
+python detector.py --l2 data/l2-total-add.csv --output ./results_full --no_nn
+
+# Adversarial runs both:
+python real_adversarial_pipeline.py --results ./results_full --flows 20
+python blackbox_adversarial_pipeline.py --results ./results_full --flows 20
+```
