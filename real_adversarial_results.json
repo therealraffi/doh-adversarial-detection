@@ -3,14 +3,14 @@
     "strategy":"naive",
     "model":"RF",
     "evasion_rate":1.0,
-    "mean_confidence":0.467,
+    "mean_confidence":0.4659,
     "n_flows":20
   },
   {
     "strategy":"naive",
     "model":"GB",
     "evasion_rate":1.0,
-    "mean_confidence":0.0000011752,
+    "mean_confidence":0.000001157,
     "n_flows":20
   },
   {
@@ -23,106 +23,106 @@
   {
     "strategy":"timing_only",
     "model":"RF",
-    "evasion_rate":0.95,
-    "mean_confidence":0.4645,
+    "evasion_rate":1.0,
+    "mean_confidence":0.462,
     "n_flows":20
   },
   {
     "strategy":"timing_only",
     "model":"GB",
     "evasion_rate":1.0,
-    "mean_confidence":0.0000004351,
+    "mean_confidence":0.0000004034,
     "n_flows":20
   },
   {
     "strategy":"timing_only",
     "model":"XGB",
     "evasion_rate":1.0,
-    "mean_confidence":0.2038787603,
+    "mean_confidence":0.1984838694,
     "n_flows":20
   },
   {
     "strategy":"size_mimicry",
     "model":"RF",
     "evasion_rate":1.0,
-    "mean_confidence":0.4632,
+    "mean_confidence":0.4619,
     "n_flows":20
   },
   {
     "strategy":"size_mimicry",
     "model":"GB",
     "evasion_rate":1.0,
-    "mean_confidence":0.0000003979,
+    "mean_confidence":0.0000004073,
     "n_flows":20
   },
   {
     "strategy":"size_mimicry",
     "model":"XGB",
     "evasion_rate":1.0,
-    "mean_confidence":0.1801834702,
+    "mean_confidence":0.2012238801,
     "n_flows":20
   },
   {
     "strategy":"cover_traffic",
     "model":"RF",
     "evasion_rate":1.0,
-    "mean_confidence":0.4625,
+    "mean_confidence":0.4609,
     "n_flows":20
   },
   {
     "strategy":"cover_traffic",
     "model":"GB",
     "evasion_rate":1.0,
-    "mean_confidence":0.0000004446,
+    "mean_confidence":0.0000004174,
     "n_flows":20
   },
   {
     "strategy":"cover_traffic",
     "model":"XGB",
     "evasion_rate":1.0,
-    "mean_confidence":0.204855606,
+    "mean_confidence":0.1918247789,
     "n_flows":20
   },
   {
     "strategy":"full_mimicry",
     "model":"RF",
     "evasion_rate":1.0,
-    "mean_confidence":0.4676,
+    "mean_confidence":0.4639,
     "n_flows":20
   },
   {
     "strategy":"full_mimicry",
     "model":"GB",
     "evasion_rate":1.0,
-    "mean_confidence":0.0000004253,
+    "mean_confidence":0.0000003409,
     "n_flows":20
   },
   {
     "strategy":"full_mimicry",
     "model":"XGB",
     "evasion_rate":1.0,
-    "mean_confidence":0.2311813086,
+    "mean_confidence":0.2298401892,
     "n_flows":20
   },
   {
     "strategy":"adaptive",
     "model":"RF",
-    "evasion_rate":0.95,
-    "mean_confidence":0.4663,
+    "evasion_rate":0.9,
+    "mean_confidence":0.4682,
     "n_flows":20
   },
   {
     "strategy":"adaptive",
     "model":"GB",
     "evasion_rate":1.0,
-    "mean_confidence":0.0000004318,
+    "mean_confidence":0.0000003963,
     "n_flows":20
   },
   {
     "strategy":"adaptive",
     "model":"XGB",
     "evasion_rate":1.0,
-    "mean_confidence":0.2160548717,
+    "mean_confidence":0.2222200334,
     "n_flows":20
   }
 ]
