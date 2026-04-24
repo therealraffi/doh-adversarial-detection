@@ -1,0 +1,82 @@
+{
+  "Duration": {
+    "mean": 1842.3,
+    "std": 4201.1,
+    "p5": 12.0,
+    "p95": 9800.0,
+    "min": 1.0,
+    "max": 86400000.0
+  },
+  "PacketLengthMean": {
+    "mean": 387.4,
+    "std": 201.3,
+    "p5": 80.0,
+    "p95": 850.0,
+    "min": 40.0,
+    "max": 1500.0
+  },
+  "PacketLengthVariance": {
+    "mean": 52800.0,
+    "std": 41200.0,
+    "p5": 800.0,
+    "p95": 145000.0,
+    "min": 0.0,
+    "max": 490000.0
+  },
+  "PacketLengthStandardDeviation": {
+    "mean": 189.3,
+    "std": 98.7,
+    "p5": 28.0,
+    "p95": 381.0,
+    "min": 0.0,
+    "max": 700.0
+  },
+  "DoHDNSQueryLength": {
+    "mean": 32.4,
+    "std": 18.7,
+    "p5": 10.0,
+    "p95": 78.0,
+    "min": 5.0,
+    "max": 253.0
+  },
+  "DoHDNSAnswerCount": {
+    "mean": 2.8,
+    "std": 2.1,
+    "p5": 1.0,
+    "p95": 8.0,
+    "min": 0.0,
+    "max": 30.0
+  },
+  "ResponseTimeTimeMean": {
+    "mean": 148.2,
+    "std": 312.4,
+    "p5": 18.0,
+    "p95": 620.0,
+    "min": 1.0,
+    "max": 5000.0
+  },
+  "ResponseTimeTimeVariance": {
+    "mean": 28900.0,
+    "std": 61200.0,
+    "p5": 10.0,
+    "p95": 95000.0,
+    "min": 0.0,
+    "max": 1200000.0
+  },
+  "FlowBytesSent": {
+    "mean": 4820.0,
+    "std": 8340.0,
+    "p5": 120.0,
+    "p95": 22000.0,
+    "min": 40.0,
+    "max": 500000.0
+  },
+  "FlowBytesReceived": {
+    "mean": 6230.0,
+    "std": 10800.0,
+    "p5": 200.0,
+    "p95": 28000.0,
+    "min": 40.0,
+    "max": 800000.0
+  }
+}
