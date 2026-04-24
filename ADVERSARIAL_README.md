@@ -1,7 +1,7 @@
 # Adversarial DoH C2 Evasion Framework
 
 **Branch:** `adversarial` | **Role:** Attacker  
-**Project:** DoH Tunnel / C2 Detection — Network Security Final Project  
+**Project:** DoH Tunnel / C2 Detection | Network Security Final Project  
 **Dataset:** Hokkaido University Combined Dataset (CIRA-CIC-DoHBrw-2020 + DoH-Tunnel-Traffic-HKD)
 
 ---
@@ -22,7 +22,7 @@ We built three pipelines, each representing a different attacker capability leve
 
 ## Key Findings
 
-### White-box Attack — Upper Bound
+### White-box Attack: Upper Bound
 *Attacker has: scaler, feature names, predict_proba, SHAP analysis*
 
 | Strategy | RF | GB | XGB |
@@ -34,7 +34,7 @@ We built three pipelines, each representing a different attacker capability leve
 | full_mimicry | 100% | 100% | 100% |
 | adaptive | 100% | 100% | 100% |
 
-### Black-box Attack — Realistic Attacker
+### Black-box Attack: Realistic Attacker
 *Attacker has: observed benign traffic, CICFlowMeter, Scapy. No scaler, no model internals.*
 
 | Strategy | RF | GB | XGB |
@@ -57,7 +57,7 @@ This means:
 
 ---
 
-## Threat Model — Three Levels
+## Threat Model: Three Levels
 
 ### Level 1: Black-box (Realistic)
 - Attacker observes benign DoH traffic on their network
@@ -78,7 +78,7 @@ This means:
 
 ---
 
-## Why It Works (White-box) — SHAP Analysis
+## Why It Works (White-box): SHAP Analysis
 
 We ran SHAP on all three models to identify which features drive detection:
 
@@ -93,8 +93,8 @@ We ran SHAP on all three models to identify which features drive detection:
 **Key insight:** Real benign DoH has tiny packets (mode ~74B). C2 tools send large uniform packets. Match the size distribution and fool the classifier.
 
 **Two critical bugs we fixed:**
-1. CICFlowMeter outputs time in **seconds**, training data used **milliseconds** — multiply x 1000
-2. Benign flows have 400-600 packets (~62KB) — we initially generated only ~50
+1. CICFlowMeter outputs time in **seconds**, but the training data used **milliseconds**, so multiply x 1000
+2. Benign flows have 400-600 packets (~62KB), but we initially generated only ~50
 
 ---
 
@@ -119,11 +119,11 @@ PCAP file
 
 | Strategy | Description |
 |---|---|
-| `naive` | Fixed 5s beacon, no shaping — baseline, trivially caught |
+| `naive` | Fixed 5s beacon, no shaping (baseline, trivially caught) |
 | `timing_only` | Randomized IAT matching browser Poisson distribution |
 | `size_mimicry` | Timing + packet sizes matching benign distribution |
 | `cover_traffic` | Decoy queries to real resolvers (Google, Cloudflare) |
-| `full_mimicry` | Timing + size + cover + burst grouping (page load simulation) |
+| `full_mimicry` | Timing + size + cover + burst grouping to simulate page loads |
 | `adaptive` | Full mimicry + classifier feedback loop |
 
 ---
@@ -171,7 +171,7 @@ unzip DoH-combined.zip
 
 ## How to Run
 
-### Step 1 — Train the detectors
+### Step 1: Train the detectors
 
 ```bash
 git checkout detectors
@@ -179,25 +179,25 @@ python detector.py --l2 data/l2-total-add.csv --l3 data/l3-total-add.csv --outpu
 git checkout adversarial
 ```
 
-### Step 2 — White-box attack (upper bound)
+### Step 2: White-box attack (upper bound)
 
 ```bash
 python real_adversarial_pipeline.py --results ./results_full --flows 20
 ```
 
-### Step 3 — Black-box attack (realistic attacker)
+### Step 3: Black-box attack (realistic attacker)
 
 ```bash
 python blackbox_adversarial_pipeline.py --results ./results_full --flows 20
 ```
 
-### Step 4 — Validate feature matching
+### Step 4: Validate feature matching
 
 ```bash
 python real_adversarial_pipeline.py --results ./results_full --flows 3 --validate
 ```
 
-### Step 5 — Quick demo (no models needed)
+### Step 5: Quick demo (no models needed)
 
 ```bash
 python main.py --demo
@@ -210,17 +210,17 @@ python main.py --doh-demo
 
 | File | Purpose |
 |---|---|
-| `real_adversarial_pipeline.py` | White-box pipeline — Scapy + CICFlowMeter + scaler |
-| `blackbox_adversarial_pipeline.py` | Realistic attacker — no scaler, binary feedback only |
+| `real_adversarial_pipeline.py` | White-box pipeline: Scapy + CICFlowMeter + scaler |
+| `blackbox_adversarial_pipeline.py` | Realistic attacker: no scaler, binary feedback only |
 | `integrate_detectors.py` | Fast synthetic pipeline for quick iteration |
-| `traffic_shaper.py` | Core evasion engine — 6 strategies |
+| `traffic_shaper.py` | Core evasion engine: 6 strategies |
 | `cira_cic_analyzer.py` | Extracts benign distributions from CIRA-CIC |
 | `doh_c2_client.py` | DoH C2 protocol — encodes, encrypts, transmits |
 | `adversarial_loop.py` | Standalone attack-detect-adapt loop |
 | `main.py` | Entry point for standalone runs |
 | `benign_fingerprint.json` | Synthetic benign distributions from literature |
-| `real_adversarial_results.csv` | White-box results — 20 flows per strategy |
-| `blackbox_results.csv` | Black-box results — realistic attacker |
+| `real_adversarial_results.csv` | White-box results: 20 flows per strategy |
+| `blackbox_results.csv` | Black-box results: realistic attacker |
 | `adversarial_report.json` | Stub detector baseline results |
 
 ---
@@ -230,9 +230,9 @@ python main.py --doh-demo
 1. **The setup:** Flow-based ML detectors trained on 374k real DoH flows. Our job: fool them.
 2. **The pipeline:** Traffic shaper → Scapy TCP sessions → CICFlowMeter → Classifier.
 3. **SHAP-guided targeting:** PacketLengthMode is the #1 feature. Real benign DoH = tiny packets (~74B). We match that.
-4. **White-box results:** 100% evasion across all 6 strategies, all 3 models. Upper bound assuming model theft.
-5. **Black-box results:** 0-50% evasion without model access. RF and XGB are robust. GB partially vulnerable.
-6. **The key finding:** The scaler is the critical defense artifact. Keeping it private makes RF and XGB nearly impenetrable. Stealing it makes evasion trivial.
+4. **White-box results:** 100% evasion across all 6 strategies and all 3 models, representing the upper bound assuming model theft.
+5. **Black-box results:** 0-50% evasion without model access, RF and XGB are robust, GB is partially vulnerable.
+6. **The key finding:** The scaler is the critical defense artifact. Keeping it private makes RF and XGB nearly impenetrable, but stealing it makes evasion trivial.
 7. **What this means for defenders:** Flow-based detection is viable IF model artifacts are kept strictly private. The architecture is sound — operational security is the weak point.
 
 ---
