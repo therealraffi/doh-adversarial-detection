@@ -1,0 +1,21 @@
+# Large dataset files
+*.parquet
+*.csv
+*.zip
+
+# Virtual environment
+.venv/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Output files
+robustness_results.csv
+
+# OS files
+.DS_Store
+Thumbs.db
