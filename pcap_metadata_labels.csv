@@ -1,0 +1,6 @@
+pcap_name,label,category,description,protocol,source_ip,dest_ip
+01_quiet_beacon.pcap,1,Malicious_C2_Beacon,"Minimal traffic, rhythmic check-ins (heartbeats).",DoH,172.20.0.30,172.20.0.20
+02_discovery.pcap,1,Malicious_C2_Discovery,Bursts of small packets from system enumeration commands.,DoH,172.20.0.30,172.20.0.20
+03_exfiltration.pcap,1,Malicious_C2_Exfiltration,Sustained high-volume DNS queries for file transfer.,DoH,172.20.0.30,172.20.0.20
+04_benign_web.pcap,0,Benign_Web_Browsing,Standard HTTPS/DoH patterns from Wikipedia browsing.,DoH,172.20.0.30,8.8.8.8 (External)
+05_lateral_scan.pcap,1,Malicious_C2_Lateral_Movement,Internal network scanning through the DoH tunnel.,DoH,172.20.0.30,172.20.0.20
