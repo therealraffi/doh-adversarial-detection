@@ -126,7 +126,7 @@ The white-box pipeline can draw **CIRA L2–style benign targets** (same statist
 |---|---|
 | **Tabular correlation validation** (`--correlation-validation`) | Pearson **Corr(real benign)** vs **Corr(N synthetic CIRA rows)** from the active sampler. Writes `correlation_validation_report.json` (Frobenius norm of matrix difference, max entry error, mean off-diagonal error). **CIRA space only.** |
 | **Marginal realism filter** (`--realism-filter`) | After CIC + `map_features`, compares detector features to **benign quantile bands + z-scores** on the reference table. Use `--realism-pass any` for cross-domain tolerance (default). |
-| **`--validate`** | Prints a short **CIC column vs CSV benign** comparison for the first accepted flow. |
+| **`--validate`** | Prints a short **CIC column vs benign** comparison for the **first successful CIC extraction** on **flow index 0** within each strategy (does **not** wait for `--realism-filter` acceptance). Uses **`data/l2-total-add.csv`** only (hardcoded), not `--reference-data`; if that CSV is missing, validation prints nothing. |
 
 **Target sampling modes** (`--target-sampling`):
 
@@ -216,7 +216,7 @@ Default (interpolated benign targets toward CIRA statistics):
 python real_adversarial_pipeline.py --results ./results_full --flows 20
 ```
 
-Full pipeline: **correlated tabular sampling**, **tabular correlation report**, **marginal realism gate**, and **CIC-vs-benign table** on first flow:
+Full pipeline: **correlated tabular sampling**, **tabular correlation report**, **marginal realism gate**, and **`--validate`** CIC-vs-benign table (first CIC-extracted flow per strategy; needs `data/l2-total-add.csv`):
 
 ```bash
 python real_adversarial_pipeline.py --results ./results_full --flows 20 --target-sampling correlated --correlation-validation --realism-filter --validate
