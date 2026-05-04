@@ -159,11 +159,22 @@ Reference data auto-resolves to `L2-BenignDoH-MaliciousDoH.parquet` or `data/l2-
 
 ### Dependencies
 
+**White-box / black-box pipelines** (`real_adversarial_pipeline.py`, `blackbox_adversarial_pipeline.py`), including benign sampling and CIC extraction:
+
 ```bash
-pip install numpy pandas scipy scikit-learn joblib scapy cicflowmeter
+pip install numpy pandas scipy scikit-learn joblib xgboost scapy cicflowmeter
 ```
 
-Optional: `pyarrow` (or `fastparquet`) if you read `*.parquet` reference files for benign sampling or realism profiles.
+- **`xgboost`** — Required so `joblib` can load **`xgb.joblib`** (same as training). RF and GB use **scikit-learn** only.
+- **`pyarrow`** (or **`fastparquet`**) — Optional; needed to read **`*.parquet`** reference files (`--reference-data`, default `L2-*.parquet`). CSV-only workflows do not need it.
+
+**Train detectors** (`detector.py`, Step 1) additionally need what's imported there:
+
+```bash
+pip install matplotlib seaborn shap torch
+```
+
+(Often installed alongside the same base stack; neural-net training uses **`torch`** only when you omit `--no_nn`.)
 
 ### Fix CICFlowMeter v0.5.0 Bugs
 
