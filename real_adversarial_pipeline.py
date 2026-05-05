@@ -142,37 +142,60 @@ def row_dict_from_matrix(m: np.ndarray, fn: list) -> dict:
 # PacketTimeStd      mean=11,  std=18,  p5=0,    p95=58
 # FlowBytesSent      mean=10KB,std=30KB,p5=128B, p95=68KB
 
+# CIRA-CIC benign distributions (loaded at runtime)
+# INDEPENDENT of the Hokkaido malicious tunnel training signal.
+_CIRA_STATS = None
+
+def _load_cira_stats(dataset_path='data/l2-total-add.csv'):
+    global _CIRA_STATS
+    if _CIRA_STATS is not None:
+        return _CIRA_STATS
+    try:
+        df = pd.read_csv(dataset_path, encoding='utf-8-sig')
+        df.columns = [c.lstrip('\ufeff') for c in df.columns]
+        df.replace([float('inf'), float('-inf')], float('nan'), inplace=True)
+        df.dropna(subset=['PacketLengthMode','PacketLengthMean','PacketTimeMean',
+                          'PacketTimeStandardDeviation','FlowBytesSent'], inplace=True)
+        benign = df[df['Label'].str.contains('Benign', case=False, na=False)]
+        n_pkt = float(benign['FlowBytesSent'].mean() / benign['PacketLengthMean'].mean())
+        _CIRA_STATS = {
+            'pkt_mode_mean': float(benign['PacketLengthMode'].mean()),
+            'pkt_mode_std':  float(benign['PacketLengthMode'].std()),
+            'pkt_mean_mean': float(benign['PacketLengthMean'].mean()),
+            'pkt_mean_std':  float(benign['PacketLengthMean'].std()),
+            'iat_mean':      float(benign['PacketTimeMean'].mean()),
+            'iat_std':       float(benign['PacketTimeStandardDeviation'].mean()),
+            'n_pkt_mean':    n_pkt,
+        }
+        print(f'[+] Gray-box: CIRA-CIC benign loaded ({len(benign)} flows) - independent of malicious training')
+        print(f"    PacketLengthMode: {_CIRA_STATS['pkt_mode_mean']:.1f}B")
+        print(f"    PacketLengthMean: {_CIRA_STATS['pkt_mean_mean']:.1f}B")
+        print(f"    Avg packets/flow: {_CIRA_STATS['n_pkt_mean']:.0f}")
+    except Exception as e:
+        print(f'[!] CIRA-CIC load failed: {e}. Using literature values.')
+        _CIRA_STATS = {
+            'pkt_mode_mean': 74.1, 'pkt_mode_std': 20.3,
+            'pkt_mean_mean': 137.5, 'pkt_mean_std': 81.8,
+            'iat_mean': 45.0, 'iat_std': 11.0, 'n_pkt_mean': 455,
+        }
+    return _CIRA_STATS
+
 def sample_packet_size():
-    """
-    Sample from real benign DoH packet size distribution.
-    Most packets are small (DNS queries ~54-105B).
-    Occasionally larger responses.
-    """
-    if random.random() < 0.6:
-        # Small query packets (mode cluster ~74B)
-        return max(40, int(random.gauss(74, 20)))
+    s = _load_cira_stats()
+    if __import__('random').random() < 0.6:
+        return max(40, int(__import__('random').gauss(s['pkt_mode_mean'], s['pkt_mode_std'])))
     else:
-        # Larger response packets
-        return max(100, int(random.gauss(220, 80)))
+        return max(100, int(__import__('random').gauss(s['pkt_mean_mean']*1.5, s['pkt_mean_std'])))
 
 def sample_iat_ms():
-    """
-    Sample IAT matching benign PacketTimeStd=11ms.
-    Very tight distribution — benign DoH is fast.
-    """
-    # Mean ~50ms, std ~11ms to match benign
-    return max(5, random.gauss(50, 11))
+    s = _load_cira_stats()
+    return max(5, __import__('random').gauss(s['iat_mean'], s['iat_std']))
 
 def sample_n_packets():
-    """
-    Sample number of request/response pairs to match FlowBytesSent ~10KB.
-    With ~74B per req + ~220B per resp = ~294B per pair.
-    Need ~34 pairs for 10KB. Use 20-60 range.
-    """
-    return random.randint(20, 80)
+    s = _load_cira_stats()
+    return max(50, int(__import__('random').gauss(s['n_pkt_mean'], s['n_pkt_mean']*0.3)))
 
 
-# ── TCP session builders ──────────────────────────────────────────────────────
 
 def tcp_handshake(sm, dm, si, di, sp, dp, t):
     p=[]
