@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtualenv
+netenv/
+
+# Data
+data/
+
+# Results / model artifacts
+results*/
+*.joblib
+*.pt
+*.npy
+*.json
+
+# OS
+.DS_Store
