@@ -1,0 +1,45 @@
+# docker-compose.yml
+version: "3.8"
+
+networks:
+  c2net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+services:
+  resolver:
+    image: coredns/coredns:latest
+    volumes:
+      - ./coredns/Corefile:/Corefile
+      - ./coredns/zones:/zones
+    networks:
+      c2net:
+        ipv4_address: 172.20.0.10
+    ports:
+      - "853:853"   # DoT
+      - "443:443"   # DoH
+
+  attacker:
+    image: kalilinux/kali-rolling
+    networks:
+      c2net:
+        ipv4_address: 172.20.0.20
+    stdin_open: true
+    tty: true
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./sliver-data:/root/.sliver
+      - ./captures:/captures
+
+  victim:
+    image: ubuntu:22.04
+    networks:
+      c2net:
+        ipv4_address: 172.20.0.30
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./implants:/implants

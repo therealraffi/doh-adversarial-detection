@@ -1,0 +1,15 @@
+# coredns/Corefile
+.:853 {
+    tls /certs/server.crt /certs/server.key
+    forward . 8.8.8.8
+    log
+    errors
+}
+
+.:443 {
+    https . {
+        tls /certs/server.crt /certs/server.key
+    }
+    forward . 8.8.8.8
+    log
+}
