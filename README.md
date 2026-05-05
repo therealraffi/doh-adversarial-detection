@@ -231,13 +231,13 @@ The detector step must be run before the adversarial pipelines because it create
 
 The white-box pipeline assumes the attacker has access to the trained models, scaler, feature names, and model feedback. This is an upper-bound attack setting.
 
-Default run:
+Default run using interpolated benign targets:
 
 ```bash
 python real_adversarial_pipeline.py --results ./results_full --flows 20
 ```
 
-Full run with correlated benign target sampling, correlation validation, marginal realism filtering, and feature validation:
+Full run with correlated tabular sampling, tabular correlation validation, marginal realism filtering, and CIC-vs-benign validation:
 
 ```bash
 python real_adversarial_pipeline.py \
@@ -248,6 +248,23 @@ python real_adversarial_pipeline.py \
     --realism-filter \
     --validate
 ```
+
+Useful realism and validation flags:
+
+```bash
+python real_adversarial_pipeline.py \
+    --results ./results_full \
+    --flows 20 \
+    --target-sampling correlated \
+    --correlation-validation \
+    --correlation-val-n 3000 \
+    --correlation-report correlation_validation_report.json \
+    --realism-filter \
+    --realism-pass any \
+    --validate
+```
+
+On PowerShell, use the same command on one line instead of using `\` line breaks.
 
 ---
 
@@ -298,17 +315,23 @@ python main.py --doh-demo
 
 | Flag | Description |
 |---|---|
-| `--results` | Directory containing trained model artifacts from `detector.py` |
-| `--flows` | Number of generated flows per evasion strategy |
-| `--target-sampling interpolated` | kNN-style blend of nearby benign CIRA rows |
-| `--target-sampling correlated` | Multivariate Gaussian sampling with Ledoit-Wolf shrunk covariance |
-| `--target-sampling legacy` | Original random wire-stat sampling |
-| `--correlation-validation` | Compare real benign CIRA correlation structure against synthetic sampled rows |
-| `--correlation-val-n` | Number of synthetic rows used for correlation validation |
-| `--correlation-report` | Path to write the correlation validation report |
-| `--realism-filter` | Apply marginal realism checks after CICFlowMeter extraction |
-| `--realism-pass all\|any` | Require all checks or any check to pass |
-| `--validate` | Print a CIC column vs. benign comparison for the first extracted flow |
+| `--results` | Directory containing trained model artifacts from `detector.py`. |
+| `--flows` | Number of generated flows per evasion strategy. |
+| `--target-sampling interpolated` | Default. kNN-style blend of nearby benign CIRA rows with noise and quantile clipping. |
+| `--target-sampling correlated` | Multivariate Gaussian sampling in standardized space using Ledoit-Wolf shrunk covariance. |
+| `--target-sampling legacy` | Original random wire-stat sampling without CIRA row targeting. |
+| `--reference-data` | Optional path to the benign reference dataset. If omitted, the pipeline tries to use `L2-BenignDoH-MaliciousDoH.parquet` or `data/l2-total-add.csv`. |
+| `--correlation-validation` | Runs tabular correlation validation between real benign CIRA rows and synthetic sampled CIRA-style rows. |
+| `--correlation-val-n` | Number of synthetic rows used for correlation validation. Default is usually 3000. |
+| `--correlation-report` | Path to write the tabular correlation validation report, usually `correlation_validation_report.json`. |
+| `--realism-filter` | Applies marginal realism checks after CICFlowMeter extraction and feature mapping. |
+| `--realism-pass all\|any` | Controls whether all realism checks must pass or whether any check passing is enough. `any` is usually better for cross-domain tolerance. |
+| `--max-p99-violations` | Tunes how many upper-quantile violations are allowed during marginal realism filtering. |
+| `--max-z-violations` | Tunes how many z-score violations are allowed during marginal realism filtering. |
+| `--realism-q-low` | Lower quantile bound for the realism filter. |
+| `--realism-q-high` | Upper quantile bound for the realism filter. |
+| `--realism-retries` | Number of retries allowed when generated flows fail the realism filter. |
+| `--validate` | Prints a CIC column vs. benign comparison for the first extracted flow in each strategy. |
 
 ---
 
@@ -373,25 +396,54 @@ Detected or evaded
 
 ## Realistic Benign Targeting and Validation
 
-The white-box pipeline can sample benign CIRA-style targets and use those targets to drive Scapy session generation.
+The white-box pipeline can draw CIRA L2-style benign targets from the reference dataset, map those targets into Scapy session parameters, generate packet-level traffic, and then run CICFlowMeter on the resulting synthetic PCAPs.
+
+This is important because the generated traffic does not directly reproduce raw CIRA rows. The pipeline goes through several transformations:
+
+```text
+CIRA benign target row
+      |
+traffic_params_from_cira_features()
+      |
+Scapy TCP session generation
+      |
+CICFlowMeter extraction
+      |
+map_features()
+      |
+Detector feature vector
+```
+
+Because CICFlowMeter features and CIRA feature columns are not always identical, validation is split into multiple checks instead of assuming exact row-level reproduction.
+
+### Validation Layers
+
+| Layer | What it checks |
+|---|---|
+| `--correlation-validation` | Compares Pearson correlation structure from real benign CIRA rows against synthetic CIRA-style rows from the active sampler. This writes `correlation_validation_report.json`, including Frobenius norm of the matrix difference, max entry error, and mean off-diagonal error. This check happens in CIRA feature space only. |
+| `--realism-filter` | After CICFlowMeter extraction and `map_features()`, compares detector features against benign quantile bands and z-score limits from the reference table. This is a marginal realism check after packet generation. |
+| `--validate` | Prints a short CIC column vs. benign comparison for the first successful CIC extraction on flow index 0 within each strategy. This does not wait for `--realism-filter` acceptance. It uses `data/l2-total-add.csv`, so if that file is missing, validation prints nothing. |
 
 ### Target Sampling Modes
 
 | Mode | Behavior |
 |---|---|
-| `interpolated` | Blends nearby benign rows with noise and quantile clipping |
-| `correlated` | Learns a covariance structure from benign rows and samples correlated synthetic rows |
-| `legacy` | Uses the older random wire-stat generation method |
+| `interpolated` | Default mode. Uses a kNN-style blend of nearby benign rows, adds small noise, and clips to benign quantiles. This follows the same general idea as `synthetic_realistic_doh_generator.ipynb`. |
+| `correlated` | Uses a multivariate Gaussian in standardized space with Ledoit-Wolf shrunk covariance, then inverse-transforms and clips values. This explicitly models linear correlations among CIRA columns. |
+| `legacy` | Uses the older random wire-stat generation method without sampling CIRA target rows. |
 
-### Validation Options
+Reference data auto-resolves to `L2-BenignDoH-MaliciousDoH.parquet` or `data/l2-total-add.csv` when present. You can override this with `--reference-data`.
 
-| Layer | What it checks |
+### Environment Variables
+
+| Variable | Purpose |
 |---|---|
-| Tabular correlation validation | Compares correlation matrices from real benign CIRA rows and synthetic sampled rows |
-| Marginal realism filter | Checks whether mapped CICFlowMeter features fall within benign quantile and z-score ranges |
-| `--validate` | Prints a short CICFlowMeter vs. benign feature comparison |
+| `DOH_CFM_FORCE_CLI=1` | Forces CICFlowMeter CLI instead of in-process extraction. |
+| `DOH_CFM_DEBUG=1` | Prints CICFlowMeter failures when falling back. |
 
-Because CICFlowMeter features and CIRA feature columns are not always identical, validation should be interpreted as a realism sanity check rather than exact row reproduction.
+### Important Interpretation Note
+
+The realism checks are sanity checks, not proof that a generated flow is identical to a real benign flow. The pipeline maps from CIRA-style target features to Scapy packets and then back into CICFlowMeter features, so some mismatch is expected. For that reason, `--realism-pass any` is often more useful than `--realism-pass all` when checking cross-domain feature realism.
 
 ---
 
@@ -457,7 +509,9 @@ In the black-box setting, the attacker has observed benign traffic and public to
 4. Random Forest and XGBoost are more robust in the black-box setting.
 5. Gradient Boosting is fastest, but more vulnerable to black-box evasion.
 6. Synthetic feature edits should be validated because changing one feature group in isolation can create unrealistic traffic.
-7. Correlation-aware benign sampling and marginal realism checks help make adversarial evaluation more realistic.
+7. Correlation-aware benign sampling helps avoid treating features as independent.
+8. The realism filter gives a stricter view of attack quality by checking whether generated flows stay within benign marginal ranges after packet generation and CICFlowMeter extraction.
+9. With strict realism filtering, evasion results may drop because fewer generated flows pass the realism gate. Those results should be interpreted as evasion among flows that pass the realism checks, not necessarily the raw upper-bound evasion rate.
 
 ---
 
