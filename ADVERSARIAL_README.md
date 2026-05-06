@@ -247,3 +247,44 @@ python detector.py --l2 data/l2-total-add.csv --output ./results_full --no_nn
 python real_adversarial_pipeline.py --results ./results_full --flows 20
 python blackbox_adversarial_pipeline.py --results ./results_full --flows 20
 ```
+
+---
+
+## Realistic Pipeline Results (Mark's KNN Branch)
+
+When using KNN-interpolated benign targets from real CIRA-CIC data instead of independently sampled features, results change for RF:
+
+| Strategy | RF | GB | XGB |
+|---|---|---|---|
+| naive | 35% | 100% | 100% |
+| timing_only | 20% | 100% | 100% |
+| size_mimicry | 15% | 100% | 100% |
+| cover_traffic | 30% | 100% | 100% |
+| full_mimicry | 10% | 100% | 100% |
+| adaptive | 40% | 100% | 100% |
+
+**Key finding:** RF is sensitive to statistical realism of generated flows. GB and XGB remain fully evadable regardless.
+
+Results saved in `real_adversarial_results.csv` on the `realistic` branch.
+
+---
+
+## Real C2 Generalization — Raffi's Sliver PCAPs
+
+Evaluated our trained detectors against 5 real Sliver C2 PCAPs (tool never seen in training):
+
+| PCAP | True Label | RF | GB | XGB |
+|---|---|---|---|---|
+| 01_quiet_beacon | Malicious | 100% | 100% | 100% |
+| 02_discovery | Malicious | 100% | 3% | 4% |
+| 03_exfiltration | Malicious | 100% | 99% | 99% |
+| 04_benign_web | Benign | 0% | 0% | 26% |
+| 05_lateral_scan | Malicious | 100% | 4% | 6% |
+
+**Key findings:**
+- RF catches all malicious traffic but has false positives on benign web browsing
+- GB and XGB miss discovery and lateral scan (only 3-6% detection)
+- Models generalize well to C2 behaviors similar to training data, but struggle with unseen patterns
+- All PCAPs and flow CSVs saved on the `adversarial` branch
+
+Run evaluation: `python evaluate_real_c2.py`
