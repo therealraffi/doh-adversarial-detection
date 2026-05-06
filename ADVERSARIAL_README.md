@@ -103,15 +103,42 @@ We ran SHAP on all three models to identify which features drive detection:
 ```
 traffic_shaper.py
       | (6 evasion strategies)
+[optional] benign_target_sampling.py
+      | interpolated (kNN blend) or correlated (Ledoit–Wolf MVN) or legacy wire stats
+      | -> traffic_params_from_cira_features() drives IAT / sizes in schedule_to_session()
 [Scapy] - Full TCP sessions with handshake + data + teardown
       |
-PCAP file
+PCAP file (temp dir; CICFlowMeter in-process on Windows, CLI fallback)
       |
-[CICFlowMeter] - 28 real flow features (same tool as training data)
+[CICFlowMeter] - flow features (mapped to detector columns via map_features)
       |
-[White-box] scaler.transform() + predict_proba()    -> 100% evasion
-[Black-box] raw unscaled features + model.predict() -> 0-50% evasion
+[optional] realism filter: mapped features vs CIRA benign marginals (not identical feature space)
+      |
+[White-box] scaler.transform() + predict_proba()
+[Black-box] raw unscaled features + model.predict() -> 0-50% typical evasion
 ```
+
+### Realistic benign targeting and validation (pipeline v5)
+
+The white-box pipeline can draw **CIRA L2–style benign targets** (same statistical columns as the reference dataset), map them to **Scapy session parameters**, then run **CICFlowMeter** on synthetic PCAPs. That chain does **not** reproduce raw CIRA rows exactly (CIC ≠ CIRA; `map_features` is approximate), so validation is split:
+
+| Layer | What it checks |
+|---|---|
+| **Tabular correlation validation** (`--correlation-validation`) | Pearson **Corr(real benign)** vs **Corr(N synthetic CIRA rows)** from the active sampler. Writes `correlation_validation_report.json` (Frobenius norm of matrix difference, max entry error, mean off-diagonal error). **CIRA space only.** |
+| **Marginal realism filter** (`--realism-filter`) | After CIC + `map_features`, compares detector features to **benign quantile bands + z-scores** on the reference table. Use `--realism-pass any` for cross-domain tolerance (default). |
+| **`--validate`** | Prints a short **CIC column vs benign** comparison for the **first successful CIC extraction** on **flow index 0** within each strategy (does **not** wait for `--realism-filter` acceptance). Uses **`data/l2-total-add.csv`** only (hardcoded), not `--reference-data`; if that CSV is missing, validation prints nothing. |
+
+**Target sampling modes** (`--target-sampling`):
+
+| Value | Behavior |
+|---|---|
+| `interpolated` (default) | kNN-style blend of two nearby benign rows + noise + quantile clip (same spirit as `synthetic_realistic_doh_generator.ipynb`). |
+| `correlated` | Multivariate Gaussian in standardized space with **Ledoit–Wolf** shrunk covariance; inverse-transform and clip. Explicit linear correlations among CIRA columns. |
+| `legacy` | Original v4-style random wire stats (no CIRA row sampling). |
+
+Reference data auto-resolves to `L2-BenignDoH-MaliciousDoH.parquet` or `data/l2-total-add.csv` when present; override with `--reference-data`.
+
+**Environment:** `DOH_CFM_FORCE_CLI=1` forces CICFlowMeter CLI instead of in-process extraction. `DOH_CFM_DEBUG=1` prints failures when falling back.
 
 ---
 
@@ -132,9 +159,22 @@ PCAP file
 
 ### Dependencies
 
+**White-box / black-box pipelines** (`real_adversarial_pipeline.py`, `blackbox_adversarial_pipeline.py`), including benign sampling and CIC extraction:
+
 ```bash
-pip install numpy pandas scipy scikit-learn joblib scapy cicflowmeter
+pip install numpy pandas scipy scikit-learn joblib xgboost scapy cicflowmeter
 ```
+
+- **`xgboost`** — Required so `joblib` can load **`xgb.joblib`** (same as training). RF and GB use **scikit-learn** only.
+- **`pyarrow`** (or **`fastparquet`**) — Optional; needed to read **`*.parquet`** reference files (`--reference-data`, default `L2-*.parquet`). CSV-only workflows do not need it.
+
+**Train detectors** (`detector.py`, Step 1) additionally need what's imported there:
+
+```bash
+pip install matplotlib seaborn shap torch
+```
+
+(Often installed alongside the same base stack; neural-net training uses **`torch`** only when you omit `--no_nn`.)
 
 ### Fix CICFlowMeter v0.5.0 Bugs
 
@@ -181,9 +221,26 @@ git checkout adversarial
 
 ### Step 2: White-box attack (upper bound)
 
+Default (interpolated benign targets toward CIRA statistics):
+
 ```bash
 python real_adversarial_pipeline.py --results ./results_full --flows 20
 ```
+
+Full pipeline: **correlated tabular sampling**, **tabular correlation report**, **marginal realism gate**, and **`--validate`** CIC-vs-benign table (first CIC-extracted flow per strategy; needs `data/l2-total-add.csv`):
+
+```bash
+python real_adversarial_pipeline.py --results ./results_full --flows 20 --target-sampling correlated --correlation-validation --realism-filter --validate
+```
+
+(On bash you can split the line with `\` at end of each line; PowerShell: use the single line above.)
+
+Useful flags:
+
+- `--correlation-val-n 3000` — synthetic rows used for the correlation matrix comparison (default 3000).
+- `--correlation-report path.json` — where to write tabular correlation metrics.
+- `--realism-pass all|any` — require both band and z checks (`all`) or either (`any`, default; better when mapping CIC features to CIRA envelopes).
+- `--max-p99-violations`, `--max-z-violations`, `--realism-q-low`, `--realism-q-high`, `--realism-retries` — tune or loosen the marginal gate.
 
 ### Step 3: Black-box attack (realistic attacker)
 
@@ -210,7 +267,8 @@ python main.py --doh-demo
 
 | File | Purpose |
 |---|---|
-| `real_adversarial_pipeline.py` | White-box pipeline: Scapy + CICFlowMeter + scaler |
+| `real_adversarial_pipeline.py` | White-box pipeline: Scapy + CICFlowMeter + scaler + optional realism / correlation options |
+| `benign_target_sampling.py` | Interpolated and correlated (Ledoit–Wolf MVN) benign CIRA samplers; tabular correlation validation helpers |
 | `blackbox_adversarial_pipeline.py` | Realistic attacker: no scaler, binary feedback only |
 | `integrate_detectors.py` | Fast synthetic pipeline for quick iteration |
 | `traffic_shaper.py` | Core evasion engine: 6 strategies |
@@ -219,7 +277,9 @@ python main.py --doh-demo
 | `adversarial_loop.py` | Standalone attack-detect-adapt loop |
 | `main.py` | Entry point for standalone runs |
 | `benign_fingerprint.json` | Synthetic benign distributions from literature |
-| `real_adversarial_results.csv` | White-box results: 20 flows per strategy |
+| `synthetic_realistic_doh_generator.ipynb` | Notebook: kNN interpolation for CIRA-like rows (tabular only) |
+| `correlation_validation_report.json` | Generated: tabular correlation metrics when `--correlation-validation` is used |
+| `real_adversarial_results.csv` | Generated: white-box run summary per strategy and model |
 | `blackbox_results.csv` | Black-box results: realistic attacker |
 | `adversarial_report.json` | Stub detector baseline results |
 
@@ -228,12 +288,12 @@ python main.py --doh-demo
 ## Presentation Narrative
 
 1. **The setup:** Flow-based ML detectors trained on 374k real DoH flows. Our job: fool them.
-2. **The pipeline:** Traffic shaper → Scapy TCP sessions → CICFlowMeter → Classifier.
-3. **SHAP-guided targeting:** PacketLengthMode is the #1 feature. Real benign DoH = tiny packets (~74B). We match that.
-4. **White-box results:** 100% evasion across all 6 strategies and all 3 models, representing the upper bound assuming model theft.
-5. **Black-box results:** 0-50% evasion without model access, RF and XGB are robust, GB is partially vulnerable.
-6. **The key finding:** The scaler is the critical defense artifact. Keeping it private makes RF and XGB nearly impenetrable, but stealing it makes evasion trivial.
-7. **What this means for defenders:** Flow-based detection is viable IF model artifacts are kept strictly private. The architecture is sound — operational security is the weak point.
+2. **The pipeline:** Traffic shaper → (optional) **correlated or interpolated CIRA benign targets** → Scapy TCP sessions → CICFlowMeter → Classifier; optional **tabular correlation check** and **marginal realism gate** before trusting synthetic evaluation.
+3. **SHAP-guided targeting:** PacketLengthMode is the #1 feature. Real benign DoH = tiny packets (~74B). We match that; joint sampling (kNN blend or MVN with shrunk covariance) avoids changing one feature group in isolation.
+4. **White-box results:** With classic settings, often near **100% evasion** (upper bound with scaler access). With **strict realism filtering**, reported evasion can drop because fewer synthetic flows pass the CIRA marginal envelope after CIC mapping; interpret those numbers as “evasion among flows that pass our realism checks,” not the raw upper bound.
+5. **Black-box results:** 0-50% evasion without model access, RF and XGB are typically robust, GB is partially vulnerable.
+6. **The key finding:** The scaler remains a critical defense artifact for white-box comparison. Model behavior can still differ by learner (RF vs GB vs XGB) on out-of-distribution synthetic features.
+7. **What this means for defenders:** Flow-based detection is viable if model artifacts are protected; also validate detectors on **distribution-shifted** synthetic traffic, not only scalar SHAP ablations.
 
 ---
 
@@ -246,6 +306,9 @@ python detector.py --l2 data/l2-total-add.csv --output ./results_full --no_nn
 # Adversarial runs both:
 python real_adversarial_pipeline.py --results ./results_full --flows 20
 python blackbox_adversarial_pipeline.py --results ./results_full --flows 20
+
+# Optional: white-box with benign correlation modeling + tabular validation report
+python real_adversarial_pipeline.py --results ./results_full --flows 20 --target-sampling correlated --correlation-validation
 ```
 
 ---

@@ -146,8 +146,8 @@ class TrafficShaper:
         Main entry point.
         Returns an ordered list of QuerySchedule objects to execute.
         """
-        print(f"\n[*] Building schedule — strategy: {strategy.value}")
-        print(f"[*] Payload: {len(c2_payload)} bytes → chunked into {math.ceil(len(c2_payload)/chunk_size)} queries")
+        print(f"\n[*] Building schedule - strategy: {strategy.value}")
+        print(f"[*] Payload: {len(c2_payload)} bytes -> chunked into {math.ceil(len(c2_payload)/chunk_size)} queries")
 
         if strategy == EvasionStrategy.NAIVE:
             return self._naive_schedule(c2_payload, chunk_size)
@@ -314,7 +314,7 @@ class TrafficShaper:
         if dr > 0.5 and feat in self.fp:
             # Tighten sampling around this feature's benign mean
             self.fp[feat]["std"] *= 0.5
-            print(f"[ADAPTIVE] Tightened {feat} std → {self.fp[feat]['std']:.2f}")
+            print(f"[ADAPTIVE] Tightened {feat} std -> {self.fp[feat]['std']:.2f}")
 
         if dr > 0.8:
             print("[ADAPTIVE] High detection. Increasing cover ratio recommendation.")

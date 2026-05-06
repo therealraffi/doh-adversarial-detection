@@ -50,7 +50,6 @@ def parse_args():
     # p.add_argument("--test_size", type=float, default=0.25)
     p.add_argument("--test_size", type=float, default=0.2, help="Test fraction")
     p.add_argument("--no_nn", action="store_true", help="Skip neural network model")
-    p.add_argument("--adversarial", default=None, help="Path to adversarial flows CSV for hard negative retraining")
     p.add_argument("--sample", type=int, default=None, help="Randomly sample N rows for fast iteration")
     return p.parse_args()
 
@@ -587,24 +586,6 @@ if __name__ == "__main__":
     X, y, feature_cols, benign_label = load_and_inspect(
         args.l2, sample=args.sample, seed=args.seed
     )
-
-
-    # Inject adversarial hard negatives
-    if args.adversarial and os.path.exists(args.adversarial):
-        adv = pd.read_csv(args.adversarial)
-        print(f"\n[+] Injecting {len(adv)} adversarial flows as hard negatives")
-        adv_feat = adv[[c for c in adv.columns if c in feature_cols]]
-        for col in feature_cols:
-            if col not in adv_feat.columns:
-                adv_feat[col] = 0.0
-        adv_feat = adv_feat[feature_cols]
-        adv_labels = pd.Series([1] * len(adv_feat))
-        X = pd.concat([X, adv_feat], ignore_index=True)
-        y = pd.concat([y, adv_labels], ignore_index=True)
-        print(f"[+] Dataset size after injection: {len(X)} rows")
-        print(f"[+] Class distribution: {dict(y.value_counts().sort_index())}")
-    elif args.adversarial:
-        print(f"[!] Adversarial file not found: {args.adversarial}")
 
     X_train, X_test, y_train, y_test = preprocess(
         X, y, feature_cols, args.test_size, args.seed, args.output

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Virtualenv
+netenv/
+
+# Data
+data/
+
+# Results / model artifacts
+results*/
+*.joblib
+*.pt
+*.npy
+*.json
+
+# OS
+.DS_Store
+
+# C2 lab — large/sensitive artifacts only (Docker configs etc. are tracked)
+c2-lab/sliver-data/
+c2-lab/implants/
+c2-lab/captures/
+c2-lab/coredns/certs/*.key
+
+# Zip archives and macOS extraction artifacts
+__MACOSX/
+*.zip
