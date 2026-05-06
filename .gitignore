@@ -1,21 +1,33 @@
-# ── c2-lab ────────────────────────────────────────────────────────────────────
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
 
+# ── Virtualenv ────────────────────────────────────────────────────────────────
+netenv/
+
+# ── Data ──────────────────────────────────────────────────────────────────────
+data/
+
+# ── Results / model artifacts ─────────────────────────────────────────────────
+results*/
+*.joblib
+*.pt
+*.npy
+*.json
+
+# ── c2-lab ────────────────────────────────────────────────────────────────────
 # Sliver server data — contains Go/Zig toolchains, DB, and compiled artifacts (~1 GB)
 c2-lab/sliver-data/
-
 # Compiled implant binaries
 c2-lab/implants/
-
 # Packet captures (can be large; store out-of-band or in a data store)
 c2-lab/captures/
-
 # TLS private keys
 c2-lab/coredns/certs/*.key
 
-# ── detectors ─────────────────────────────────────────────────────────────────
-# (per-directory rules live in detectors/.gitignore)
-
-# ── archives & macOS artifacts ────────────────────────────────────────────────
+# ── Archives & macOS artifacts ────────────────────────────────────────────────
 *.zip
 __MACOSX/
 

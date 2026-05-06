@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-04-12T14:08:06Z",
+  "rounds": [
+    {
+      "round": 1,
+      "strategy": "naive",
+      "n_flows": 100,
+      "detected": 100,
+      "evasion_rate": 0.0,
+      "mean_confidence": 0.75,
+      "top_leaking_feature": "Duration",
+      "leaking_ks_stat": 1.0
+    },
+    {
+      "round": 2,
+      "strategy": "timing_only",
+      "n_flows": 100,
+      "detected": 0,
+      "evasion_rate": 1.0,
+      "mean_confidence": 0.3,
+      "top_leaking_feature": "PacketLengthMean",
+      "leaking_ks_stat": 1.0
+    },
+    {
+      "round": 3,
+      "strategy": "size_mimicry",
+      "n_flows": 100,
+      "detected": 0,
+      "evasion_rate": 1.0,
+      "mean_confidence": 0.015,
+      "top_leaking_feature": "DoHDNSQueryLength",
+      "leaking_ks_stat": 1.0
+    },
+    {
+      "round": 4,
+      "strategy": "cover_traffic",
+      "n_flows": 100,
+      "detected": 0,
+      "evasion_rate": 1.0,
+      "mean_confidence": 0.0,
+      "top_leaking_feature": "DoHDNSQueryLength",
+      "leaking_ks_stat": 1.0
+    },
+    {
+      "round": 5,
+      "strategy": "full_mimicry",
+      "n_flows": 100,
+      "detected": 0,
+      "evasion_rate": 1.0,
+      "mean_confidence": 0.0,
+      "top_leaking_feature": "DoHDNSQueryLength",
+      "leaking_ks_stat": 1.0
+    },
+    {
+      "round": 6,
+      "strategy": "adaptive",
+      "n_flows": 100,
+      "detected": 0,
+      "evasion_rate": 1.0,
+      "mean_confidence": 0.0,
+      "top_leaking_feature": "DoHDNSQueryLength",
+      "leaking_ks_stat": 1.0
+    }
+  ]
+}
